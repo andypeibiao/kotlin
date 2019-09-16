@@ -37,7 +37,7 @@ import org.jetbrains.org.objectweb.asm.tree.MethodNode
 class IrSourceCompilerForInline(
     override val state: GenerationState,
     override val callElement: IrMemberAccessExpression,
-    val codegen: ExpressionCodegen,
+    private val codegen: ExpressionCodegen,
     private val data: BlockInfo
 ) : SourceCompilerForInline {
 

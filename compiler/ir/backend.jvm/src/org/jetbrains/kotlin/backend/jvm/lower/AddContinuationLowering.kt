@@ -14,6 +14,7 @@ import org.jetbrains.kotlin.backend.common.phaser.makeIrFilePhase
 import org.jetbrains.kotlin.backend.common.pop
 import org.jetbrains.kotlin.backend.common.push
 import org.jetbrains.kotlin.backend.jvm.JvmBackendContext
+import org.jetbrains.kotlin.backend.jvm.codegen.isInlineIrExpression
 import org.jetbrains.kotlin.codegen.coroutines.*
 import org.jetbrains.kotlin.config.coroutinesPackageFqName
 import org.jetbrains.kotlin.descriptors.Modality
@@ -419,10 +420,14 @@ private class AddContinuationLowering(private val context: JvmBackendContext) : 
                 if (owner.isInline) {
                     for (i in 0 until expression.valueArgumentsCount) {
                         if (owner.valueParameters[i].isNoinline) continue
-                        (expression.getValueArgument(i) as? IrContainerExpressionBase)?.statements?.filterIsInstance<IrFunctionReference>()
-                            ?.singleOrNull()?.let {
-                                inlineLambdas += it
+
+                        val valueArgument = expression.getValueArgument(i) ?: continue
+                        if (isInlineIrExpression(valueArgument)) {
+                            assert(valueArgument !is IrCallableReference) {
+                                "callable references should be lowered to function references"
                             }
+                            inlineLambdas += (valueArgument as IrBlock).statements.filterIsInstance<IrFunctionReference>().single()
+                        }
                     }
                 }
                 expression.acceptChildrenVoid(this)
