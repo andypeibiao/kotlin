@@ -22,6 +22,7 @@ import org.jetbrains.kotlin.ir.expressions.*
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.util.dump
 import org.jetbrains.kotlin.ir.util.getArguments
+import org.jetbrains.kotlin.ir.util.isSuspend
 import org.jetbrains.kotlin.resolve.jvm.jvmSignature.JvmMethodSignature
 import org.jetbrains.org.objectweb.asm.Type
 import org.jetbrains.org.objectweb.asm.commons.Method
@@ -126,7 +127,7 @@ class IrInlineCodegen(
     ): LambdaInfo {
         val referencedFunction = irReference.symbol.owner
         return IrExpressionLambdaImpl(
-            irReference, referencedFunction, codegen.typeMapper, codegen.methodSignatureMapper, parameter.isCrossinline,
+            irReference, referencedFunction, codegen.typeMapper, codegen.methodSignatureMapper, codegen.context, parameter.isCrossinline,
             boundReceiver != null, parameter.type.isExtensionFunctionType
         ).also { lambda ->
             val closureInfo = invocationParamBuilder.addNextValueParameter(type, true, null, parameter.index)
@@ -141,6 +142,7 @@ class IrExpressionLambdaImpl(
     val function: IrFunction,
     private val typeMapper: IrTypeMapper,
     methodSignatureMapper: MethodSignatureMapper,
+    private val context: JvmBackendContext,
     isCrossInline: Boolean,
     override val isBoundCallableReference: Boolean,
     override val isExtensionLambda: Boolean
@@ -170,7 +172,7 @@ class IrExpressionLambdaImpl(
             }
         }
 
-    private val loweredMethod = methodSignatureMapper.mapAsmMethod(function)
+    private val loweredMethod = methodSignatureMapper.mapAsmMethod(function.getOrCreateSuspendFunctionViewIfNeeded(context))
 
     val capturedParamsInDesc: List<Type> =
         loweredMethod.argumentTypes.drop(if (isExtensionLambda) 1 else 0).take(capturedVars.size)
@@ -179,16 +181,18 @@ class IrExpressionLambdaImpl(
         Method(
             it.name,
             it.returnType,
-            (
-                    (if (isExtensionLambda) it.argumentTypes.take(1) else emptyList()) +
-                            it.argumentTypes.drop((if (isExtensionLambda) 1 else 0) + capturedVars.size)
-                    ).toTypedArray()
+            ((if (isExtensionLambda) it.argumentTypes.take(1) else emptyList()) +
+                    it.argumentTypes.drop((if (isExtensionLambda) 1 else 0) + capturedVars.size)).toTypedArray()
         )
     }
 
     override val invokeMethodDescriptor: FunctionDescriptor = function.descriptor
 
     override val hasDispatchReceiver: Boolean = false
+
+    override fun getInlineSuspendLambdaViewDescriptor(): FunctionDescriptor {
+        return function.getOrCreateSuspendFunctionViewIfNeeded(context).descriptor
+    }
 }
 
 fun isInlineIrExpression(argumentExpression: IrExpression) =

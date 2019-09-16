@@ -76,7 +76,8 @@ private class AddContinuationLowering(private val context: JvmBackendContext) : 
 
                 if (!expression.isSuspend)
                     return expression
-                val constructor = suspendLambdas.single { it.function == expression.symbol.owner }.constructor
+                val constructor = suspendLambdas.singleOrNull { it.function == expression.symbol.owner }?.constructor
+                    ?: return expression
                 val expressionArguments = expression.getArguments().map { it.second }
                 assert(constructor.valueParameters.size == expressionArguments.size) {
                     "Inconsistency between callable reference to suspend lambda and the corresponding continuation"
@@ -407,15 +408,30 @@ private class AddContinuationLowering(private val context: JvmBackendContext) : 
 
     private fun markSuspendLambdas(irElement: IrElement): List<SuspendLambdaInfo> {
         val suspendLambdas = arrayListOf<SuspendLambdaInfo>()
+        val inlineLambdas = mutableSetOf<IrFunctionReference>()
         irElement.acceptChildrenVoid(object : IrElementVisitorVoid {
             override fun visitElement(element: IrElement) {
                 element.acceptChildrenVoid(this)
             }
 
+            override fun visitCall(expression: IrCall) {
+                val owner = expression.symbol.owner
+                if (owner.isInline) {
+                    for (i in 0 until expression.valueArgumentsCount) {
+                        if (owner.valueParameters[i].isNoinline) continue
+                        (expression.getValueArgument(i) as? IrContainerExpressionBase)?.statements?.filterIsInstance<IrFunctionReference>()
+                            ?.singleOrNull()?.let {
+                                inlineLambdas += it
+                            }
+                    }
+                }
+                expression.acceptChildrenVoid(this)
+            }
+
             override fun visitFunctionReference(expression: IrFunctionReference) {
                 expression.acceptChildrenVoid(this)
 
-                if (expression.isSuspend) {
+                if (expression.isSuspend && expression !in inlineLambdas) {
                     suspendLambdas += SuspendLambdaInfo(
                         expression.symbol.owner,
                         (expression.type as IrSimpleType).arguments.size - 1,
