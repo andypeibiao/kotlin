@@ -16,7 +16,7 @@ fun baz(name: String) {}
 
 fun box(): String {
     assertEquals(
-            listOf("extension receiver of ${Int::foo}", "parameter #1 s of ${Int::foo}"),
+            listOf("extension receiver parameter of ${Int::foo}", "parameter #1 s of ${Int::foo}"),
             Int::foo.parameters.map(Any::toString)
     )
 

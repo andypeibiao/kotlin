@@ -95,7 +95,7 @@ internal object ReflectionObjectRenderer {
     fun renderParameter(parameter: KParameterImpl): String {
         return buildString {
             when (parameter.kind) {
-                KParameter.Kind.EXTENSION_RECEIVER -> append("extension receiver")
+                KParameter.Kind.EXTENSION_RECEIVER -> append("extension receiver parameter")
                 KParameter.Kind.INSTANCE -> append("instance parameter")
                 KParameter.Kind.VALUE -> append("parameter #${parameter.index} ${parameter.name}")
             }
